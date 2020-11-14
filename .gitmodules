@@ -1,0 +1,3 @@
+[submodule "node-win-pid"]
+	path = node-win-pid
+	url = https://github.com/tomashubelbauer/node-win-pid
