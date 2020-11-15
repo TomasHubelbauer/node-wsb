@@ -11,48 +11,42 @@ import pid from './node-win-pid/index.js';
 export default async function (/** @type {string} */ command) {
   const directoryName = 'wsb';
   const directoryPath = path.join(os.tmpdir(), directoryName);
+
+  // TODO: Detect the folder existing and wait if so confifugred
+  // TODO: Delete after the session run so it doesn't appear as running next time
   await fs.promises.rm(directoryPath, { recursive: true, force: true });
   await fs.promises.mkdir(directoryPath);
-  await fs.promises.writeFile(path.join(directoryPath, directoryName) + '.ps1', command);
 
-  const tempDirectoryPath = 'C:\\Users\\WDAGUtilityAccount\\AppData\\Local\\Temp\\' + directoryName;
+  const execFilePath = path.join(directoryPath, directoryName) + '_exec.ps1';
+  await fs.promises.writeFile(execFilePath, command);
 
-  const logonCommand = [
-    // Start PowerShell using its full path because there is not %PATH% here
-    'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
-    // Remove execution policy to be able to run the script file we'll make
-    '-executionpolicy unrestricted',
-    // Put together the bootstrap command to run the script file later
-    '-command "',
-    // Start transcript that will be used as a return value when done executing
-    `Start-Transcript ${path.join(tempDirectoryPath, directoryName)}.log;`,
-    // Execute the command from the script file we've created with it
-    // TODO: Wrap this in a try-catch so that the `*.done` file is written for sure
-    // (not sure if it would be if the inner script did e.g.: `$ErrorActionPreference = "Stop"`)
-    // Do not use the `&` operator because Windows Sandbox won't accept it
-    //`powershell -file ${path.join(tempDirectoryPath, directoryName)}.ps1 -wait;`,
-    // TODO: Make this work using the above, this won't support multi-line
-    command + ';',
-    // Touch the `*.done` file to signal the script has finished processing
-    `$null > ${path.join(tempDirectoryPath, directoryName)}.done`,
-    // End the string literal containing the bootstrap script we're running
-    '"',
-  ].join(' ');
+  const bootFilePath = path.join(directoryPath, directoryName) + '_boot.ps1';
+  await fs.promises.writeFile(bootFilePath, `
+Start-Transcript $Env:Temp/${directoryName}/${directoryName}.log
+try {
+  & $Env:Temp/${directoryName}/${directoryName}_exec.ps1
+}
+finally {
+  $null > $Env:Temp/${directoryName}/${directoryName}.done
+  exit
+}
+`);
 
   // Note that `%tmp%` can not be used in `SandboxFolder` path values
-  // Note that Windows-style back-slashes need to be used for path separators
-  // See also https://github.com/damienvanrobaeys/Windows_Sandbox_Editor
+  // Note that Windows-style \ back-slashes need to be used for path separators
+  // Use full `powershell.exe` path because this environment doesn't have %PATH%
+  // Use `-executionpolicy unrestricted` otherwise we couldn't run the `-file`
   const wsbFilePath = path.join(directoryPath, directoryName) + '.wsb';
   await fs.promises.writeFile(wsbFilePath, `
 <Configuration>
   <MappedFolders>
     <MappedFolder>
       <HostFolder>${directoryPath}</HostFolder>
-      <SandboxFolder>${tempDirectoryPath}</SandboxFolder>
+      <SandboxFolder>C:\\Users\\WDAGUtilityAccount\\AppData\\Local\\Temp\\${directoryName}</SandboxFolder>
     </MappedFolder>
   </MappedFolders>
   <LogonCommand>
-    <Command>${logonCommand}</Command>
+    <Command>C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -executionpolicy unrestricted -file C:\\Users\\WDAGUtilityAccount\\AppData\\Local\\Temp\\${directoryName}\\${directoryName}_boot.ps1</Command>
   </LogonCommand>
 </Configuration>
 `);
