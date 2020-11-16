@@ -4,8 +4,6 @@ import fs from 'fs';
 import child_process from 'child_process';
 import pid from './node-win-pid/index.js';
 
-// TODO: Figure out the dangling promise/callback that prevents Node from ending
-// (it doesn't seem to be either of the processes according to Task Manager)
 // TODO: Add options (share pwd (r/w or r/o), add other shares)
 // TODO: Allow running a PS1 file directly instead of the PowerShell code string
 export default async function (/** @type {string} */ command) {
