@@ -51,7 +51,7 @@ finally {
 </Configuration>
 `);
 
-  // TODO: Figure out how to run this with no window being shown and stealing focus
+  // TODO: Figure out how to run this with no window, `{ windowsHide: true }` doesn't do it
   // Note that this relies on Windows Sandbox being a singleton process as enforced by Windows
   const { pid: windowsSandboxPid } = child_process.exec(`windowssandbox ${wsbFilePath}`);
   const windowsSandboxClientPid = await pid('WindowsSandboxClient.exe');
@@ -60,11 +60,12 @@ finally {
     // Kill Windows Sandbox as soon as we notice the `*.done` file was created
     // TODO: Find out if `Stop-Computer` could be used without WSB showing warning
     let done;
-    fs.watch(directoryPath, (_event, filename) => {
+    const watcher = fs.watch(directoryPath, (_event, filename) => {
       if (filename === directoryName + '.done' && !done) {
         done = true;
         process.kill(windowsSandboxPid);
         process.kill(windowsSandboxClientPid);
+        watcher.close();
         resolve();
       }
     });
