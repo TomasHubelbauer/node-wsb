@@ -6,6 +6,14 @@ This library allows running PowerShell scripts in Windows Sandbox.
 
 `git submodule add https://github.com/tomashubelbauer/node-wsb`
 
+To update:
+
+```sh
+cd node-wsb
+git pull
+cd ..
+```
+
 ## Usage
 
 ```js
