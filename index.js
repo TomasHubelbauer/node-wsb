@@ -3,16 +3,51 @@ import os from 'os';
 import fs from 'fs';
 import child_process from 'child_process';
 import pid from './node-win-pid/index.js';
+import anticipate from './anticipate.js';
 
 // TODO: Add options (share pwd (r/w or r/o), add other shares)
-// TODO: Allow running a PS1 file directly instead of the PowerShell code string
-export default async function (/** @type {string} */ command) {
+// TODO: Allow running a PS1 file by path instead of the PowerShell code string
+
+/**
+ * Runs a PowerShell command in the Windows Sandbox environment and returns its
+ * standard I/O.
+ * 
+ * @param {string} command The PowerShell command to run. Can be multi-line.
+ * @param {{ timeout: number; selfOnly: true; }} wait How to wait for another
+ * instance of Windows Sandbox to finish if one is running. `undefined` means to
+ * not wait and throw if another Windows Sandbox instance is running. `selfOnly`
+ * means to wait only if the Windows Sandbox instance appears to be running due
+ * to `node-wsb`, throw if it appears to be running due to the computer user.
+ */
+export default async function (command, wait = 'self') {
   const directoryName = 'wsb';
   const directoryPath = path.join(os.tmpdir(), directoryName);
 
-  // TODO: Detect the folder existing and wait if so confifugred
-  // TODO: Delete after the session run so it doesn't appear as running next time
-  await fs.promises.rm(directoryPath, { recursive: true, force: true });
+  // Check if the temporary directory exists (and see if we need to wait or not)
+  try {
+    await fs.promises.access(directoryPath);
+
+    // TODO: Split this into two checks potentially - does it have a benefit?
+    // See if Windows Sandbox is really running or the directory is just stray
+    try {
+      await pid('WindowsSandbox.exe', false);
+      await pid('WindowsSandboxClient.exe', false);
+
+      // TODO: Implement this decision based on the `wait` argument value
+      throw new Error('TODO: Wait or bail as Windows Sanbox is running');
+    }
+    catch (error) {
+      // Delete the stray temporary directory as Windows Sandbox is not running
+      await fs.promises.rm(directoryPath, { recursive: true });
+    }
+  }
+  catch (error) {
+    // Rethrow error unless it is ENOENT indicating the directory doesn't exist
+    if (error.code !== 'ENOENT') {
+      throw error;
+    }
+  }
+
   await fs.promises.mkdir(directoryPath);
 
   const execFilePath = path.join(directoryPath, directoryName) + '_exec.ps1';
@@ -50,7 +85,7 @@ finally {
 `);
 
   // TODO: Figure out how to run this with no window, `{ windowsHide: true }` doesn't do it
-  // Note that this relies on Windows Sandbox being a singleton process as enforced by Windows
+  // Note that this works due to Windows Sandbox being a single-instance process
   const { pid: windowsSandboxPid } = child_process.exec(`windowssandbox ${wsbFilePath}`);
   const windowsSandboxClientPid = await pid('WindowsSandboxClient.exe');
 
@@ -64,12 +99,18 @@ finally {
         process.kill(windowsSandboxPid);
         process.kill(windowsSandboxClientPid);
         watcher.close();
+
+        // TODO: Stall until the processes are really dead - keep querying PIDs
         resolve();
       }
     });
   });
 
   const transcript = await fs.promises.readFile(path.join(directoryPath, directoryName) + '.log', 'utf-8');
+
+  // Wait for the directory to be deletable (after WSB has let its handle go)
+  // TODO: Wrap in `finally` to avoid inconsistency (dir but no WSB instance)
+  await anticipate(() => fs.promises.rm(directoryPath, { recursive: true }), error => error.code === 'EBUSY' ? 'continue' : undefined, 10000, 100);
 
   // TODO: Figure out why this doesn't work
   const regex = /^\*{22}\r?\n(?<meta>(.*?\r?\n)*?)\*{22}\r?\n.*?(?<data>(.*?\r?\n)*?)$/;
@@ -78,5 +119,7 @@ finally {
   const match = regex.exec(transcript);
 
   const delimiter = '**********************\r\n';
+
+  // TODO: Return the full transcript for debugging and parse it for std I/O and exit code
   return transcript.slice(transcript.indexOf('\n', transcript.lastIndexOf(delimiter) + delimiter.length) + '\n'.length);
 }

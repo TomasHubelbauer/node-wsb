@@ -19,7 +19,7 @@ cd ..
 ```js
 import wsb from './node-wsb/index.js';
 
-console.log(await wsb('echo "Hello, World!"'));
+console.log(await wsb('echo "Hello, World!"')); // "Hello, World!\r\n"
 ```
 
 ## Development
@@ -30,20 +30,25 @@ Run tests using `npm test`.
 
 #### Address code to-do comments
 
+Use [`todo`](https://github.com/tomashubelbauer/todo).
+
 #### Recognize the transcript end value
 
 - `PS>TerminatingError(): "Error time"` if `throw`
 - `PS>$Global:1` or something was there at some point too
 - nothing (`****…`) if the last command is empty line
 
-#### Enqueue the execution if another WSB instance is already running
+Might need to wait for the processes to be really dead and the transcript fully
+flushed before I can access its final content.
 
-Think about recognizing this by the existence of the temp folder or just the
-WSB process. If just the WSB process is running, but there is no folder, the
-user is running it - should we still enqueue then? Maybe we can extend the API
-to be able to configure this:
+#### Finalize the `wait` argument logic - wait or bail based on its value
 
-`wait`:
-- `true` - wait for user WSB and this WSB
-- `false` - throw if can't run WSB immediately
-- `"except-user"` - wait only if this WSB is running, not if the user is running it
+#### Add a "simulation" mode option which falls back to PowerShell direct
+
+This would be used in the CI or when the user doesn't want to / can't enable WSB
+on their machine.
+
+
+#### Consider adding a Docker backend for non-Windows and CI environments maybe
+
+Perhaps it should be a separate package though.
