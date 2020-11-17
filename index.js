@@ -134,8 +134,8 @@ finally {
   const match = transcript.data.length === 1 && regex.exec(transcript.data[0]);
 
   // Switch the response to either stdout or stderr based on recognized error
-  const stdout = !match ? transcript.data.join('\n') : '';
-  const stderr = match ? match.groups.message : '';
+  const stdout = !match ? transcript.data.join('\n') + '\n' : '';
+  const stderr = match ? match.groups.message + '\n' : '';
   const exitCode = match ? 1 : 0;
 
   // Return the `transcript` object as a whole for the purposes of debugging
